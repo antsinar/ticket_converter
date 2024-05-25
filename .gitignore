@@ -1,4 +1,5 @@
-*.html
+render.html
+sample*
 *.eml
 *.png
 *.jpg

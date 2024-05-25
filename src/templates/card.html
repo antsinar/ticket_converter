@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html style="font-family: Tahoma, 'Helvetica Neue', Helvetica, Arial, sans-serif;" xmlns:helper="urn:helper" xmlns:crmobj="urn:ms-crm"">  
+  <head>
+    <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>TicketConverter</title>
+    <style>
+
+.ticket {
+  width: 660px;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: nowrap;
+  flex-direction: column;
+  flex-grow: 0;
+  flex-shrink: 1;
+  border: 4px solid black;
+  border-radius: 8px;
+}
+
+.ticket .image {
+  overflow-x: scroll;
+  overflow-wrap: unset;
+  object-fit: fit;
+}
+
+.ticket .info {
+  padding: 0.25rem;
+  padding-right: 2rem;
+  padding-left: 2rem;
+  background-color: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ticket .event {
+  padding-top: 2rem;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  height: 75px;
+}
+
+.ticket .info p {
+  font-size: 18px;
+  max-width: 300px;
+  text-wrap: balance;
+}
+
+.ticket #barcode img {
+  padding: 0;
+  width: 300px;
+  height: 100px;
+}
+
+span {
+  display: flex;
+  gap: 0.75rem;
+}
+
+svg {
+  width: 20px;
+}
+
+#barcode {
+  width: 300px;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@media print {
+      @page {
+          size: A4 portrait; 
+          margin: 0;
+          scale: 0.85; /* scale 85% */
+      }
+
+      body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+      }
+
+      button {
+          display: none;
+      }
+  }
+
+    </style>
+    <!-- <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script> -->
+  </head>
+  <body style="font-family: Tahoma, sans-serif;">
+    <div class="ticket" id="ticket">
+      <div class="image" id="scrollcontainer">
+        <img src="data:image/png;base64, {{ banner | safe }}" alt="Banner" id="scrollimage">
+      </div>
+      <div class="info">
+        <div class="event">
+          <div class="" id="outer-place">
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/></svg>
+              <p>{{ venue }}</p>
+            </span>
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M0 80V229.5c0 17 6.7 33.3 18.7 45.3l176 176c25 25 65.5 25 90.5 0L418.7 317.3c25-25 25-65.5 0-90.5l-176-176c-12-12-28.3-18.7-45.3-18.7H48C21.5 32 0 53.5 0 80zm112 32a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"/></svg>
+              <p>Τιμή: {{ price }}</p>
+            </span>
+          </div>
+          <div class="" id="inner-place">
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M464 256A208 208 0 1 1 48 256a208 208 0 1 1 416 0zM0 256a256 256 0 1 0 512 0A256 256 0 1 0 0 256zM232 120V256c0 8 4 15.5 10.7 20l96 64c11 7.4 25.9 4.4 33.3-6.7s4.4-25.9-6.7-33.3L280 243.2V120c0-13.3-10.7-24-24-24s-24 10.7-24 24z"/></svg>
+              <p>{{ date }}</p>
+            </span>
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M64 160C64 89.3 121.3 32 192 32H448c70.7 0 128 57.3 128 128v33.6c-36.5 7.4-64 39.7-64 78.4v48H128V272c0-38.7-27.5-71-64-78.4V160zM544 272c0-20.9 13.4-38.7 32-45.3c5-1.8 10.4-2.7 16-2.7c26.5 0 48 21.5 48 48V448c0 17.7-14.3 32-32 32H576c-17.7 0-32-14.3-32-32H96c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32V272c0-26.5 21.5-48 48-48c5.6 0 11 1 16 2.7c18.6 6.6 32 24.4 32 45.3v48 32h32H512h32V320 272z"/></svg>
+              <p>{{ seat }}</p>
+            </span>
+          </div>
+        </div>
+        <div id="barcode">
+          <img src="data:image/png;base64, {{ barcode | safe }}" alt="Watermark">
+        </div>
+      </div>
+    </div>
+    <button type="button" onclick="scrollToLeft()" id="scroll-left"><-</button>
+    <button type="button" onclick="scrollToRight()" id="scroll-right">-></button>
+
+    <script defer>
+      const scrollContainer = document.getElementById("scrollcontainer");
+      const scrollImage = document.getElementById("scrollimage");
+      function scrollToLeft(){
+        scrollContainer.scrollLeft -= 20
+      }
+
+      function scrollToRight(){
+        scrollContainer.scrollLeft += 20
+      }
+
+      function shiftBanner() {
+        const img = document.getElementById("scrollimage");
+        img.style.transform = `translateX(-${scrollContainer.scrollLeft}px)`
+      }
+
+      function shiftBannerOriginal() {
+        const img = document.getElementById("scrollimage");
+        img.style.transform = `translateX(${scrollContainer.scrollLeft}px)`
+        img.style.transform = "unset"
+      }
+
+      window.onbeforeprint = shiftBanner;
+      window.onafterprint = shiftBannerOriginal;
+    </script>
+  </body>
+</html>

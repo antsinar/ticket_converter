@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html style="font-family: Tahoma, 'Helvetica Neue', Helvetica, Arial, sans-serif;" xmlns:helper="urn:helper" xmlns:crmobj="urn:ms-crm"">  
+  <head>
+    <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>TicketConverter</title>
+    <style>
+      /* height: 460 -> 24:9 */
+      /* height: 523 -> 21:9 */
+      /* height: fit-content -> 512px */
+      .ticket {
+  width: 1220px;
+  /* height: 523px; */
+  /* height: fit-content; */
+  /* border: 2px solid ; */
+  /* border-radius: 8px; */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 0;
+  flex-shrink: 1;
+}
+
+.ticket .image {
+  /* width: 100%; */
+  object-fit: cover;
+}
+
+.ticket .info {
+  padding: 0.25rem;
+  padding-right: 2rem;
+  padding-left: 2rem;
+  background-color: #f9f9f9;
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ticket .event {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ticket .info p {
+  font-size: 20px;
+}
+
+.ticket .event img {
+  width: 300px;
+  height: 100px;
+}
+
+span {
+  display: flex;
+  gap: 0.75rem;
+}
+
+svg {
+  width: 20px;
+}
+
+@media print {
+            @page {
+                size: A4 portrait; /* Set paper size to A4 and orientation to portrait */
+                margin: 0; /* Set margins to none */
+                scale: 0.64; /* Set scale to 64% */
+            }
+
+            body {
+                -webkit-print-color-adjust: exact; /* Ensure backgrounds are printed */
+                print-color-adjust: exact;
+            }
+
+            /* Additional print-specific styles can go here */
+        }
+
+    </style>
+    <!-- <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script> -->
+  </head>
+  <body style="font-family: Tahoma, sans-serif;">
+    <div class="ticket" id="ticket">
+      <div class="image">
+        <img src="data:image/png;base64, {{ banner | safe }}" alt="Banner">
+      </div>
+      <div class="info">
+        <div class="event" id="outer-place">
+          <span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/></svg>
+            <p>{{ venue }}</p>
+          </span>
+          <span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M464 256A208 208 0 1 1 48 256a208 208 0 1 1 416 0zM0 256a256 256 0 1 0 512 0A256 256 0 1 0 0 256zM232 120V256c0 8 4 15.5 10.7 20l96 64c11 7.4 25.9 4.4 33.3-6.7s4.4-25.9-6.7-33.3L280 243.2V120c0-13.3-10.7-24-24-24s-24 10.7-24 24z"/></svg>
+            <p>{{ date }}</p>
+          </span>
+        </div>
+        <div class="event" id="inner-place">
+          <span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M0 80V229.5c0 17 6.7 33.3 18.7 45.3l176 176c25 25 65.5 25 90.5 0L418.7 317.3c25-25 25-65.5 0-90.5l-176-176c-12-12-28.3-18.7-45.3-18.7H48C21.5 32 0 53.5 0 80zm112 32a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"/></svg>
+            <p>Τιμή: {{ price }}</p>
+          </span>
+          <span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--!Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M64 160C64 89.3 121.3 32 192 32H448c70.7 0 128 57.3 128 128v33.6c-36.5 7.4-64 39.7-64 78.4v48H128V272c0-38.7-27.5-71-64-78.4V160zM544 272c0-20.9 13.4-38.7 32-45.3c5-1.8 10.4-2.7 16-2.7c26.5 0 48 21.5 48 48V448c0 17.7-14.3 32-32 32H576c-17.7 0-32-14.3-32-32H96c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32V272c0-26.5 21.5-48 48-48c5.6 0 11 1 16 2.7c18.6 6.6 32 24.4 32 45.3v48 32h32H512h32V320 272z"/></svg>
+            <p>{{ seat }}</p>
+          </span>
+        </div>
+        <div class="event" id="barcode">
+          <img src="data:image/png;base64, {{ barcode | safe }}" alt="Watermark">
+        </div>
+      </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script defer>
+      function generate_pdf() {
+        const ticket = document.querySelector(".ticket");
+        const worker = html2pdf()
+        const opt = {
+          margin: 1,
+          filename: "ticket.pdf",
+          image: { type: "png" },
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: "in", format: "a4", orientation: "landscape" },
+        };
+        worker.set(opt).from(ticket).save();
+      }
+    </script>
+    <script defer>
+      function download_image(){
+        const ticket = document.querySelector(".ticket");
+        html2canvas(ticket).then((canvas) => {
+          const img = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.download = "render.png";
+          link.href = img;
+          link.click();
+        });
+      }
+    </script>
+  </body>
+</html>
