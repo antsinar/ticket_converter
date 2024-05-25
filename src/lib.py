@@ -67,16 +67,21 @@ class EmailReader:
     async def read_eml(self) -> None:
         with open(self.eml_file, "r", encoding="utf-8") as fp:
             msg = email.message_from_file(fp, policy=policy.default)
-            self.content = msg.get_payload(decode=True).decode()
+            try:
+                self.content = await self.sanitize_content(
+                    msg.get_payload(decode=True).decode()
+                )
+            except InvalidEmailContent as e:
+                print("[E] Invalid email content", e)
+                exit()
+
             if not self.content:
                 raise EmailFormatError("Could not parse email contents.")
 
-    async def sanitize_content(self) -> None:
-        if not self.content:
-            await self.read_eml()
-        if nh3.is_html(self.content):
-            self.content = nh3.clean(self.content)
-            return
+    async def sanitize_content(self, content: str) -> str:
+        """Return sanitized email content"""
+        if nh3.is_html(content):
+            return nh3.clean(content)
         raise InvalidEmailContent("Content does not contain HTML")
 
     async def url_valid(self, url: str) -> bool:
