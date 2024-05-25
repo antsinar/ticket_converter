@@ -39,7 +39,7 @@ async def main() -> None:
     await email_reader.read_eml()
     try:
         await email_reader.sanitize_content()
-    except lib.InvalidEmailContent as e:
+    except errors.InvalidEmailContent as e:
         print("[E] Invalid email content", e)
         exit()
     await email_reader.set_content_images()
