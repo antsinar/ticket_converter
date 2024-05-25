@@ -8,15 +8,22 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import httpx
 import justext
-import lxml.html
+import lxml.html  # nosec -- handles sanitized input
+import nh3
 from jinja2 import Environment, FileSystemLoader
 from jinja2 import Template as jTemplate
 from playwright.async_api import async_playwright
 
-from errors import DownloadError, EmailFormatError, MessageTooLongError
+from errors import (
+    DownloadError,
+    EmailFormatError,
+    InvalidEmailContent,
+    MessageTooLongError,
+)
 
 # BARCODE_URL = "https://www.more.com/site/data/common/barcode.ashx?code="
 BARCODE_URL = "https://barcodeapi.org/api/128/"
@@ -63,6 +70,26 @@ class EmailReader:
             self.content = msg.get_payload(decode=True).decode()
             if not self.content:
                 raise EmailFormatError("Could not parse email contents.")
+
+    async def sanitize_content(self) -> None:
+        if not self.content:
+            await self.read_eml()
+        if nh3.is_html(self.content):
+            self.content = nh3.clean(self.content)
+            return
+        raise InvalidEmailContent("Content does not contain HTML")
+
+    async def url_valid(self, url: str) -> bool:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname
+            in [
+                "www.more.com",
+                "www.viva.gr",
+            ]
+            and "/getattachment/" in parsed.path
+        )
 
     async def set_content_images(self) -> None:
         if not self.content:
@@ -114,6 +141,9 @@ class Ticket:
         b = banner[0] if len(banner) != 0 else None
         if not b:
             return
+        if not await self.reader.url_valid(b):
+            print(b)
+            raise DownloadError("Invalid banner URL")
         await self.download_banner(b, client, save=True)
 
     async def set_price(self) -> None:
@@ -228,7 +258,9 @@ class TokenManager:
         self, ticket: Ticket, template_file: str = "./templates/ticket.html"
     ) -> None:
         self.ticket = ticket
-        self.env = Environment(loader=FileSystemLoader("."))
+        # autoescaping might not be necessary since the html contents
+        # of the email are already sanitized
+        self.env = Environment(loader=FileSystemLoader("."), autoescape=True)
         self.template_file = template_file
 
     async def template_exists(self) -> bool:

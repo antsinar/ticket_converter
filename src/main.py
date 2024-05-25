@@ -27,9 +27,21 @@ async def main() -> None:
     if not await file_valid(args.file):
         exit()
 
+        # user agent required for the banner -- more.com
+    client = httpx.AsyncClient(
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0"  # noqa
+        }
+    )
+
     email_reader = lib.EmailReader(args.file)
 
     await email_reader.read_eml()
+    try:
+        await email_reader.sanitize_content()
+    except lib.InvalidEmailContent as e:
+        print("[E] Invalid email content", e)
+        exit()
     await email_reader.set_content_images()
     await email_reader.set_content_fields()
 
@@ -38,13 +50,6 @@ async def main() -> None:
     await ticket.set_seat()
     await ticket.set_venue()
     await ticket.set_date()
-
-    # user agent required for the banner -- more.com
-    client = httpx.AsyncClient(
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0"  # noqa
-        }
-    )
 
     try:
         await ticket.set_banner(client)

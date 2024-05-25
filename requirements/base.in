@@ -1,5 +1,11 @@
+# async networking
 httpx==0.27.0
+# email parsing
 lxml==5.2.1
 jusText==3.0.1
+# templating
 Jinja2==3.1.4
+# pdf rendering
 playwright==1.44.0
+# security
+nh3==0.2.17

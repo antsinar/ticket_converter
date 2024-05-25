@@ -10,3 +10,6 @@ black
 flake8
 flake8-bugbear
 isort
+
+# security
+bandit==1.7.8

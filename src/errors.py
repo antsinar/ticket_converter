@@ -13,6 +13,11 @@ class EmailFormatError(Exception):
         super().__init__(*args)
 
 
+class InvalidEmailContent(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 class PdfError(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
