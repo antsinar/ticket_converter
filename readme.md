@@ -1,7 +1,7 @@
 # More.com to physical ticket convertion
 
 ## Description
-Convert your digital ticket from more.comto a ready-for-printing pdf file.  
+Convert your digital ticket from more.com to a ready-for-printing pdf file.  
 
 ## Usage
 Written in python 3.12  
@@ -27,3 +27,4 @@ b) relative to src/
 - [ ] email forwading receiver and sender
 - [X] print details and print settings
 - [ ] more available print templates
+- [ ] alternative way to generate pdfs 
