@@ -1,0 +1,12 @@
+-r base.txt
+
+# testing
+pytest==8.2.0
+pytest-asyncio==0.23.6
+coverage
+
+# linting
+black
+flake8
+flake8-bugbear
+isort
