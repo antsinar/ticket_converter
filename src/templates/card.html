@@ -8,7 +8,7 @@
     <style>
 
 .ticket {
-  width: 660px;
+  width: 732px;
   overflow: hidden;
   display: flex;
   flex-wrap: nowrap;
@@ -128,33 +128,6 @@ svg {
         </div>
       </div>
     </div>
-    <button type="button" onclick="scrollToLeft()" id="scroll-left"><-</button>
-    <button type="button" onclick="scrollToRight()" id="scroll-right">-></button>
 
-    <script defer>
-      const scrollContainer = document.getElementById("scrollcontainer");
-      const scrollImage = document.getElementById("scrollimage");
-      function scrollToLeft(){
-        scrollContainer.scrollLeft -= 20
-      }
-
-      function scrollToRight(){
-        scrollContainer.scrollLeft += 20
-      }
-
-      function shiftBanner() {
-        const img = document.getElementById("scrollimage");
-        img.style.transform = `translateX(-${scrollContainer.scrollLeft}px)`
-      }
-
-      function shiftBannerOriginal() {
-        const img = document.getElementById("scrollimage");
-        img.style.transform = `translateX(${scrollContainer.scrollLeft}px)`
-        img.style.transform = "unset"
-      }
-
-      window.onbeforeprint = shiftBanner;
-      window.onafterprint = shiftBannerOriginal;
-    </script>
   </body>
 </html>

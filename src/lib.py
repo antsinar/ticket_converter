@@ -17,12 +17,14 @@ import nh3
 from jinja2 import Environment, FileSystemLoader
 from jinja2 import Template as jTemplate
 from playwright.async_api import async_playwright
+from PIL import Image
 
 from errors import (
     DownloadError,
     EmailFormatError,
     InvalidEmailContent,
     MessageTooLongError,
+    ManagerConfigError,
 )
 
 # BARCODE_URL = "https://www.more.com/site/data/common/barcode.ashx?code="
@@ -54,6 +56,25 @@ class SizeOptions(str, Enum):
     A4 = "A4"
     A5 = "A5"
     Letter = "Letter"
+
+
+class ShiftOptions(Enum):
+    """Image positioning on specific templates
+    Numbers are image width multipliers
+    """
+
+    LEFT = 0
+    CENTER_LEFT = 1 / 4
+    CENTER = 1 / 2
+    CENTER_RIGHT = 3 / 4
+    RIGHT = 1
+
+
+class AdjustOptions(Enum):
+    """Fine adjustments for image positioning"""
+
+    LEFT = -50
+    RIGHT = 50
 
 
 class EmailReader:
@@ -260,13 +281,19 @@ class Ticket:
 class TokenManager:
 
     def __init__(
-        self, ticket: Ticket, template_file: str = "./templates/ticket.html"
+        self,
+        ticket: Ticket,
+        template_file: str = "./templates/ticket.html",
+        shift: Optional[ShiftOptions] = None,
+        fine_adjust: Optional[AdjustOptions] = None,
     ) -> None:
         self.ticket = ticket
         # autoescaping might not be necessary since the html contents
         # of the email are already sanitized
         self.env = Environment(loader=FileSystemLoader("."), autoescape=True)
         self.template_file = template_file
+        self.shift = shift
+        self.fine_adjust = fine_adjust
 
     async def template_exists(self) -> bool:
         return Path(self.template_file).exists()
@@ -277,7 +304,8 @@ class TokenManager:
         return self.env.get_template("./templates/ticket.html")
 
     async def get_rendered_template(self) -> str:
-        ticket_data = self.append_ticket()
+        ticket_data = await self.append_ticket()
+        await self.apply_template_specifics(ticket_data)
         template = await self.get_template()
         return template.render(ticket_data)
 
@@ -286,7 +314,7 @@ class TokenManager:
         with open("render.html", "w", encoding="utf-8") as fp:
             fp.write(await self.get_rendered_template())
 
-    def append_ticket(self) -> Dict[str, str]:
+    async def append_ticket(self) -> Dict[str, str]:
         return {
             "banner": base64.b64encode(self.ticket.banner.getvalue()).decode(),
             "barcode": base64.b64encode(self.ticket.barcode.getvalue()).decode(),
@@ -295,6 +323,58 @@ class TokenManager:
             "venue": self.ticket.venue,
             "date": self.ticket.date,
         }
+
+    async def apply_template_specifics(
+        self,
+        ticket_data: Dict[str, Optional[str]],
+    ) -> Dict[str, str]:
+        match (self.template_file):
+            case "./templates/card.html":
+                try:
+                    ticket_data["banner"] = await self.adjust_banner_shift(
+                        ticket_data["banner"]
+                    )
+                except ManagerConfigError as e:
+                    print(e)
+                    exit(1)
+            case "./templates/ticket.html":
+                pass
+            case _:
+                pass
+
+    async def adjust_banner_shift(
+        self,
+        banner: str,
+        img_width: int = 1220,
+    ) -> str:
+        if not self.shift:
+            raise ManagerConfigError("[E] Missing shift option for chosen template")
+
+        img = Image.open(BytesIO(base64.b64decode(banner)))
+        img_buffer = BytesIO()
+        # crop @ the point of interest for a width of 732px (3 * width / 5)
+        shift_amount = 2 * img_width / 5 * self.shift.value
+        if self.fine_adjust is not None:
+            if (
+                self.fine_adjust == AdjustOptions.LEFT
+                and self.shift == ShiftOptions.LEFT
+            ):
+                pass
+            elif (
+                self.fine_adjust == AdjustOptions.RIGHT
+                and self.shift == ShiftOptions.RIGHT
+            ):
+                pass
+            else:
+                shift_amount += self.fine_adjust.value
+
+        img = img.crop(
+            (0 + shift_amount, 0, 3 * img_width / 5 + shift_amount, img.height)
+        )
+        img.save(img_buffer, format="PNG")
+        return_buffer = base64.b64encode(img_buffer.getvalue()).decode()
+        img_buffer.close()
+        return return_buffer
 
 
 class Renderer:
@@ -330,7 +410,7 @@ class Renderer:
                 # invalid is rendered as ./templates/ticket.html
                 return False
 
-    async def render(self) -> None:
+    async def render(self, output_file: str) -> None:
         await self.choose_scale()
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -339,7 +419,7 @@ class Renderer:
             # TODO: add scrolling behaviour for card here
             asyncio.Barrier(parties=1)
             await page.pdf(
-                path="render.pdf",
+                path=output_file,
                 format=self.size.value,
                 print_background=True,
                 margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},

@@ -18,6 +18,11 @@ class InvalidEmailContent(Exception):
         super().__init__(*args)
 
 
+class ManagerConfigError(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
 class PdfError(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
