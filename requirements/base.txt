@@ -37,6 +37,10 @@ markupsafe==2.1.5
     # via jinja2
 nh3==0.2.17
     # via -r requirements/base.in
+numpy==1.26.4
+    # via -r requirements/base.in
+pillow==10.3.0
+    # via -r requirements/base.in
 playwright==1.44.0
     # via -r requirements/base.in
 pyee==11.1.0
