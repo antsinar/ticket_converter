@@ -1,6 +1,7 @@
 import asyncio
 from argparse import ArgumentParser
 from pathlib import Path
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -8,14 +9,25 @@ import errors
 import lib
 
 RUNTIME_OPTIONS = {
-    "token_type": lib.TokenType.TICKET,
+    "token_type": lib.TokenType.CARD,
     "pdf_output": "../render.pdf",
-    "banner_shift": lib.ShiftOptions.CENTER,
-    "fine_adjust": None,
+    "print_size": lib.SizeOptions.A4,
+    "banner_shift": lib.ShiftOptions.LEFT,
+    # "fine_adjust": lib.AdjustOptions.RIGHT,
 }
+
+# Do not modify
+REQUIRED_RUNTIME_KEYS = [
+    "token_type",
+    "pdf_output",
+    "print_size",
+    "banner_shift",
+    "fine_adjust",
+]
 
 
 async def match_type_to_template(token_type: lib.TokenType) -> str:
+    """Choose which template to use based on token type"""
     match token_type:
         case lib.TokenType.TICKET:
             return "./templates/ticket.html"
@@ -28,6 +40,7 @@ async def match_type_to_template(token_type: lib.TokenType) -> str:
 
 
 async def file_valid(file: str) -> bool:
+    """Stop execution if an non valid file argument is passed"""
     if Path(file).suffix != ".eml":
         print("[E] Must be an .eml file")
         return False
@@ -38,6 +51,18 @@ async def file_valid(file: str) -> bool:
     return True
 
 
+async def parse_runtime_options(
+    options: Dict[str, Optional[str]], required_keys: List[str]
+) -> Dict[str, Optional[str]]:
+    """Ensure that all required runtime options are present"""
+    return_options = options.copy()
+    for key in required_keys:
+        if key not in return_options.keys():
+            print(f"[X] Missing runtime option: {key}, adding it as None")
+            return_options[key] = None
+    return return_options
+
+
 async def main() -> None:
     parser = ArgumentParser()
     parser.add_argument("file", type=str, help="Path to eml file")
@@ -45,6 +70,8 @@ async def main() -> None:
     args = parser.parse_args()
     if not await file_valid(args.file):
         exit()
+
+    options = await parse_runtime_options(RUNTIME_OPTIONS, REQUIRED_RUNTIME_KEYS)
 
     # user agent required for the banner -- more.com
     client = httpx.AsyncClient(
@@ -76,18 +103,18 @@ async def main() -> None:
     except errors.MessageTooLongError:
         print("[E] Barcode message too long")
 
-    template = await match_type_to_template(RUNTIME_OPTIONS["token_type"])
+    template = await match_type_to_template(options["token_type"])
     token_manager = lib.TokenManager(
         ticket,
         template,
-        shift=RUNTIME_OPTIONS["banner_shift"],
-        fine_adjust=RUNTIME_OPTIONS["fine_adjust"],
+        shift=options["banner_shift"],
+        fine_adjust=options["fine_adjust"],
     )
     await token_manager.create_html()
 
     r = Path("render.html")
-    renderer = lib.Renderer(str(r.absolute()), template, lib.SizeOptions.A4)
-    await renderer.render(output_file=RUNTIME_OPTIONS["pdf_output"])
+    renderer = lib.Renderer(str(r.absolute()), template, options["print_size"])
+    await renderer.render(output_file=options["pdf_output"])
 
     await client.aclose()
 
