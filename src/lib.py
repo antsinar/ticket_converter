@@ -16,15 +16,15 @@ import lxml.html  # nosec -- handles sanitized input
 import nh3
 from jinja2 import Environment, FileSystemLoader
 from jinja2 import Template as jTemplate
-from playwright.async_api import async_playwright
 from PIL import Image
+from playwright.async_api import async_playwright
 
 from errors import (
     DownloadError,
     EmailFormatError,
     InvalidEmailContent,
-    MessageTooLongError,
     ManagerConfigError,
+    MessageTooLongError,
 )
 
 # BARCODE_URL = "https://www.more.com/site/data/common/barcode.ashx?code="
@@ -86,6 +86,7 @@ class EmailReader:
         self.content_images: Optional[List[lxml.html.HtmlElement]] = None
 
     async def read_eml(self) -> None:
+        """Read email html contents and save them for processing"""
         with open(self.eml_file, "r", encoding="utf-8") as fp:
             msg = email.message_from_file(fp, policy=policy.default)
             try:
@@ -100,7 +101,7 @@ class EmailReader:
                 raise EmailFormatError("Could not parse email contents.")
 
     async def sanitize_content(self, content: str) -> str:
-        """Return sanitized email content"""
+        """Return sanitized email content or exit"""
         if nh3.is_html(content):
             return nh3.clean(content)
         raise InvalidEmailContent("Content does not contain HTML")
@@ -158,6 +159,9 @@ class Ticket:
         self.date: Optional[str] = None
 
     async def set_banner(self, client: httpx.AsyncClient) -> None:
+        """Parse collection of images for the event banner
+        and initialize the download process
+        """
         banner = [
             image.attrib["src"]
             for image in self.reader.content_images
@@ -173,6 +177,7 @@ class Ticket:
         await self.download_banner(b, client, save=True)
 
     async def set_price(self) -> None:
+        """Look for the price key in the parsed email content and set it."""
         content_fields = self.reader.content_fields
         try:
             self.price = content_fields["τιμή"]
@@ -180,7 +185,8 @@ class Ticket:
             self.price = None
 
     async def set_seat(self) -> None:
-        """NOTE: on emails with the newer template, there is a 'valign' attribute in some classes that helps
+        """Look for the seat key in the parsed html content and set it as a tuple.
+        NOTE: on emails with the newer template, there is a 'valign' attribute in some classes that helps
         it does not exist on older templates
         """  # noqa
         content_fields = self.reader.content_fields
@@ -190,7 +196,7 @@ class Ticket:
             self.seat = None
 
     async def set_venue(self) -> None:
-        """Find venue starting from location icon:
+        """Find event venue starting from location icon:
         parent->parent->child[0], child[1] -> child[0] location icon <img>, child[1] venue string
         """  # noqa
         # find icon
@@ -208,7 +214,7 @@ class Ticket:
         self.venue = venue_strings[1] if len(venue_strings) > 1 else None
 
     async def set_date(self) -> None:
-        """Find date starting from date icon:
+        """Find event date starting from date icon:
         parent->parent->child[0], child[1] -> child[0] date icon <img>, child[1] date string
         """  # noqa
         img = [img for img in self.reader.content_images if img.attrib["alt"] == "Date"]
@@ -229,7 +235,7 @@ class Ticket:
     async def download_banner(
         self, url: str, client: httpx.AsyncClient, save: bool = False
     ) -> None:
-        """Download and cache banner image"""
+        """Download event banner image and save if necessary for cahing purposes"""
         img_uuid = url.split("/")[-2]
         if Path(f"{img_uuid}.png").exists():
             print("[X] Reading banner from disk")
@@ -254,7 +260,7 @@ class Ticket:
         barcode_url: str = BARCODE_URL,
         save: bool = False,
     ) -> None:
-        """Return the path (or BytesIO) of a barcode shaped watermark"""
+        """Set a BytesIO object to the barcode field to act as a watermark"""
         if len(message) > 20:
             raise MessageTooLongError(f"Message too big: {len(message)}")
 
@@ -296,25 +302,32 @@ class TokenManager:
         self.fine_adjust = fine_adjust
 
     async def template_exists(self) -> bool:
+        """Check if the template path passed exists as is."""
         return Path(self.template_file).exists()
 
     async def get_template(self) -> jTemplate:
+        """Load template file as a Jinja template."""
         if await self.template_exists():
             return self.env.get_template(self.template_file)
         return self.env.get_template("./templates/ticket.html")
 
     async def get_rendered_template(self) -> str:
+        """Render Jinja template as html with the necessary fields."""
         ticket_data = await self.append_ticket()
         await self.apply_template_specifics(ticket_data)
         template = await self.get_template()
         return template.render(ticket_data)
 
     async def create_html(self) -> None:
-        # render html
+        """Save html output from rendered template.
+        TODO: See if saving the output inside a memory buffer works,
+        this will save on File I/O operations
+        """
         with open("render.html", "w", encoding="utf-8") as fp:
             fp.write(await self.get_rendered_template())
 
     async def append_ticket(self) -> Dict[str, str]:
+        """Return data from the ticket passed in the manager and modify if necessary."""
         return {
             "banner": base64.b64encode(self.ticket.banner.getvalue()).decode(),
             "barcode": base64.b64encode(self.ticket.barcode.getvalue()).decode(),
@@ -328,6 +341,9 @@ class TokenManager:
         self,
         ticket_data: Dict[str, Optional[str]],
     ) -> Dict[str, str]:
+        """Add fields to the rendered template or modify
+        according to the needs of the token type chosen.
+        """
         match (self.template_file):
             case "./templates/card.html":
                 try:
@@ -347,6 +363,10 @@ class TokenManager:
         banner: str,
         img_width: int = 1220,
     ) -> str:
+        """Shift banner to the right, if it is required by the template file restrictions.
+        Crop the image to the correct size.
+        Save the image as a memory buffer and return it to be passed in the template.
+        """  # noqa
         if not self.shift:
             raise ManagerConfigError("[E] Missing shift option for chosen template")
 
@@ -390,27 +410,20 @@ class Renderer:
         self.scale: Optional[float] = None
 
     async def choose_scale(self) -> None:
+        """Match chosen template to the manually chosen pdf scaling options."""
         match (self.template_file):
-            case "templates/card.html":
+            case "./templates/card.html":
                 self.scale = 0.85
-            case "templates/ticket.html":
+            case "./templates/ticket.html":
                 self.scale = 0.64
             case _:
                 # invalid is rendered as ./templates/ticket.html
                 self.scale = 0.64
-
-    async def scroll_enable(self) -> bool:
-        """Enable horizontal scrolling on select templates"""
-        match (self.template_file):
-            case "templates/card.html":
-                return True
-            case "templates/ticket.html":
-                return False
-            case _:
-                # invalid is rendered as ./templates/ticket.html
-                return False
 
     async def render(self, output_file: str) -> None:
+        """Use a headless browser to generate a PDF file from the rendered
+        Jinja template.
+        """
         await self.choose_scale()
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
