@@ -1,7 +1,7 @@
 import asyncio
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import httpx
 
@@ -9,34 +9,37 @@ import errors
 import lib
 
 RUNTIME_OPTIONS = {
-    "token_type": lib.TokenType.CARD,
+    "token_type": lib.TokenType.TICKET,
     "pdf_output": "../render.pdf",
     "print_size": lib.SizeOptions.A4,
-    "banner_shift": lib.ShiftOptions.LEFT,
-    # "fine_adjust": lib.AdjustOptions.RIGHT,
+    "banner_shift": lib.ShiftOptions.CENTER_RIGHT,
+    # "fine_adjust": lib.AdjustOptions.LEFT,
+    "heading": "Live at some point",
+    "message": "This is a test, a short one that is.\nAnother Line.",
 }
 
 # Do not modify
-REQUIRED_RUNTIME_KEYS = [
-    "token_type",
-    "pdf_output",
-    "print_size",
-    "banner_shift",
-    "fine_adjust",
-]
-
-
-async def match_type_to_template(token_type: lib.TokenType) -> str:
-    """Choose which template to use based on token type"""
-    match token_type:
-        case lib.TokenType.TICKET:
-            return "./templates/ticket.html"
-        case lib.TokenType.POSTER:
-            return "./templates/poster.html"
-        case lib.TokenType.CARD:
-            return "./templates/card.html"
-        case _:
-            return "./templates/ticket.html"
+REQUIRED_KEYS_PER_TOKEN = {
+    lib.TokenType.TICKET: [
+        "token_type",
+        "pdf_output",
+        "print_size",
+    ],
+    lib.TokenType.POSTER: [
+        "token_type",
+        "pdf_output",
+        "print_size",
+        "heading",
+        "message",
+    ],
+    lib.TokenType.CARD: [
+        "token_type",
+        "pdf_output",
+        "print_size",
+        "banner_shift",
+        "fine_adjust",
+    ],
+}
 
 
 async def file_valid(file: str) -> bool:
@@ -58,9 +61,26 @@ async def parse_runtime_options(
     return_options = options.copy()
     for key in required_keys:
         if key not in return_options.keys():
-            print(f"[X] Missing runtime option: {key}, adding it as None")
+            print(f"[X] Missing runtime option: {key}, adding it as None...")
             return_options[key] = None
+    for key in options.keys():
+        if key not in required_keys:
+            print(f"[X] Extra runtime option: {key}, removing it...")
+            del return_options[key]
     return return_options
+
+
+async def match_manager(token_type: lib.TokenType):
+    """Return the correct Manager class for the given token type"""
+    match token_type:
+        case lib.TokenType.TICKET:
+            return lib.TicketManager
+        case lib.TokenType.POSTER:
+            return lib.PosterManager
+        case lib.TokenType.CARD:
+            return lib.CardManager
+        case _:
+            return lib.TicketManager
 
 
 async def main() -> None:
@@ -71,7 +91,14 @@ async def main() -> None:
     if not await file_valid(args.file):
         exit()
 
-    options = await parse_runtime_options(RUNTIME_OPTIONS, REQUIRED_RUNTIME_KEYS)
+    options = await parse_runtime_options(
+        RUNTIME_OPTIONS, REQUIRED_KEYS_PER_TOKEN[RUNTIME_OPTIONS["token_type"]]
+    )
+
+    pdf_output = options["pdf_output"]
+    print_size = options["print_size"]
+    del options["pdf_output"]
+    del options["print_size"]
 
     # user agent required for the banner -- more.com
     client = httpx.AsyncClient(
@@ -103,18 +130,14 @@ async def main() -> None:
     except errors.MessageTooLongError:
         print("[E] Barcode message too long")
 
-    template = await match_type_to_template(options["token_type"])
-    token_manager = lib.TokenManager(
-        ticket,
-        template,
-        shift=options["banner_shift"],
-        fine_adjust=options["fine_adjust"],
-    )
+    Manager = await match_manager(options["token_type"])
+
+    token_manager = Manager(ticket, **options)
     await token_manager.create_html()
 
     r = Path("render.html")
-    renderer = lib.Renderer(str(r.absolute()), template, options["print_size"])
-    await renderer.render(output_file=options["pdf_output"])
+    renderer = lib.Renderer(str(r.absolute()), options["token_type"], print_size)
+    await renderer.render(output_file=pdf_output)
 
     await client.aclose()
 

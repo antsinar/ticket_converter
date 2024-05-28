@@ -289,17 +289,29 @@ class TokenManager:
     def __init__(
         self,
         ticket: Ticket,
-        template_file: str = "./templates/ticket.html",
-        shift: Optional[ShiftOptions] = None,
-        fine_adjust: Optional[AdjustOptions] = None,
+        token_type: TokenType,
     ) -> None:
         self.ticket = ticket
         # autoescaping might not be necessary since the html contents
         # of the email are already sanitized
         self.env = Environment(loader=FileSystemLoader("."), autoescape=True)
-        self.template_file = template_file
-        self.shift = shift
-        self.fine_adjust = fine_adjust
+        self.token_type = token_type
+        self.template_file: Optional[str] = None
+
+    async def match_type_to_template(self, token_type: TokenType) -> None:
+        """Choose which template to use based on token type"""
+        match token_type:
+            case TokenType.TICKET:
+                self.template_file = "./templates/ticket.html"
+                return
+            case TokenType.POSTER:
+                self.template_file = "./templates/poster.html"
+                return
+            case TokenType.CARD:
+                self.template_file = "./templates/card.html"
+                return
+            case _:
+                return "./templates/ticket.html"
 
     async def template_exists(self) -> bool:
         """Check if the template path passed exists as is."""
@@ -323,13 +335,15 @@ class TokenManager:
         TODO: See if saving the output inside a memory buffer works,
         this will save on File I/O operations
         """
+        await self.match_type_to_template(self.token_type)
         with open("render.html", "w", encoding="utf-8") as fp:
             fp.write(await self.get_rendered_template())
 
     async def append_ticket(self) -> Dict[str, str]:
         """Return data from the ticket passed in the manager and modify if necessary."""
+        normalized_banner = await self.normalize_banner_dimmensions()
         return {
-            "banner": base64.b64encode(self.ticket.banner.getvalue()).decode(),
+            "banner": base64.b64encode(normalized_banner.getvalue()).decode(),
             "barcode": base64.b64encode(self.ticket.barcode.getvalue()).decode(),
             "price": self.ticket.price,
             "seat": ": ".join(self.ticket.seat),
@@ -340,23 +354,91 @@ class TokenManager:
     async def apply_template_specifics(
         self,
         ticket_data: Dict[str, Optional[str]],
-    ) -> Dict[str, str]:
+    ) -> None:
         """Add fields to the rendered template or modify
         according to the needs of the token type chosen.
         """
-        match (self.template_file):
-            case "./templates/card.html":
-                try:
-                    ticket_data["banner"] = await self.adjust_banner_shift(
-                        ticket_data["banner"]
-                    )
-                except ManagerConfigError as e:
-                    print(e)
-                    exit(1)
-            case "./templates/ticket.html":
-                pass
-            case _:
-                pass
+        return
+
+    async def normalize_banner_dimmensions(self) -> BytesIO:
+        """Achieve a resize of 1220 x 370 px for every banner image."""
+        banner = Image.open(self.ticket.banner)
+        if banner.width == 1220:
+            crop_param = (banner.height - 370) / 5 if banner.height > 370 else 0
+            banner = banner.crop(
+                (0, 2 * crop_param, banner.width, banner.height - 3 * crop_param)
+            )
+        else:
+            # FIXME: Find better solution to preserve image quality
+            banner = banner.resize((1220, 370), resample=Image.Resampling.LANCZOS)
+        banner_buffer = BytesIO()
+        banner.save(banner_buffer, format="PNG")
+        return banner_buffer
+
+
+class TicketManager(TokenManager):
+    def __init__(
+        self,
+        ticket: Ticket,
+        token_type: TokenType = TokenType.TICKET,
+    ) -> None:
+        super().__init__(ticket, token_type)
+
+    async def apply_template_specifics(
+        self,
+        ticket_data: Dict[str, Optional[str]],
+    ) -> None:
+        return
+
+
+class PosterManager(TokenManager):
+    def __init__(
+        self,
+        ticket: Ticket,
+        token_type: TokenType = TokenType.POSTER,
+        heading: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        super().__init__(ticket, token_type)
+        self.heading = heading
+        self.message = message
+
+    async def apply_template_specifics(
+        self,
+        ticket_data: Dict[str, Optional[str]],
+    ) -> None:
+        ticket_data["heading"] = nh3.clean(f"{self.heading}")
+        ticket_data["message"] = [
+            nh3.clean(f"{p}") for p in self.message.splitlines() if p != ""
+        ]
+
+
+class CardManager(TokenManager):
+    def __init__(
+        self,
+        ticket: Ticket,
+        token_type: TokenType = TokenType.CARD,
+        banner_shift: Optional[ShiftOptions] = None,
+        fine_adjust: Optional[AdjustOptions] = None,
+    ) -> None:
+        super().__init__(ticket, token_type)
+        self.shift = banner_shift
+        self.fine_adjust = fine_adjust
+
+    async def apply_template_specifics(
+        self,
+        ticket_data: Dict[str, Optional[str]],
+    ) -> None:
+        """Add fields to the rendered template or modify
+        according to the needs of the token type chosen.
+        """
+        try:
+            ticket_data["banner"] = await self.adjust_banner_shift(
+                ticket_data["banner"]
+            )
+        except ManagerConfigError as e:
+            print(e)
+            exit(1)
 
     async def adjust_banner_shift(
         self,
@@ -401,23 +483,25 @@ class Renderer:
     def __init__(
         self,
         rendered_html: str,
-        template_file: str = "./templates/card.html",
+        token_type: TokenType,
         size: SizeOptions = SizeOptions.A4,
     ) -> None:
         self.rendered_html = rendered_html
-        self.template_file = template_file
+        self.token_type: TokenType = token_type
         self.size: SizeOptions = size
         self.scale: Optional[float] = None
 
     async def choose_scale(self) -> None:
         """Match chosen template to the manually chosen pdf scaling options."""
-        match (self.template_file):
-            case "./templates/card.html":
+        match (self.token_type):
+            case TokenType.CARD:
                 self.scale = 0.85
-            case "./templates/ticket.html":
+            case TokenType.TICKET:
                 self.scale = 0.64
+            case TokenType.POSTER:
+                self.scale = 0.90
             case _:
-                # invalid is rendered as ./templates/ticket.html
+                # invalid is rendered as TokenType.TICKET
                 self.scale = 0.64
 
     async def render(self, output_file: str) -> None:
@@ -429,7 +513,6 @@ class Renderer:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             await page.goto(f"file:///{self.rendered_html}")
-            # TODO: add scrolling behaviour for card here
             asyncio.Barrier(parties=1)
             await page.pdf(
                 path=output_file,
