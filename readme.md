@@ -20,7 +20,12 @@ Requires python >= 3.10
 Path can be  
 a) absolute (C://)  
 b) relative to src/  
-> The exported Pdf is inside the src directory (`render.pdf`)
+> The exported Pdf is inside the src directory (`render.pdf`)  
+> 
+Modify the RUNTIME_OPTIONS dictionary inside main.py to configure the print.  
+
+Note: Email from the summer of 2021 and onwards should work.  
+Note: For emails containing more than one ticket, the last one will be printed  
 
 ## TODO:
 - [ ] email file validation
@@ -28,5 +33,6 @@ b) relative to src/
 - [ ] pre 2022 backwards compatibility
 - [ ] email forwading receiver and sender
 - [X] print details and print settings
-- [ ] more available print templates
+- [X] more available print templates
 - [ ] alternative way to generate pdfs 
+- [ ] alternative way of resizing images to preserve quality
